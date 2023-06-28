@@ -49,7 +49,7 @@ typedef struct _POSIX_TASK
 	CPUSET			stCpuAffinity;
 	CHAR			strName[MAX_NAME_LENGTH];
 	RTTIME			ullPeriod;
-	
+	BOOL			bJoinable;
 	/* timer related (for periodic tasks) */
 	TIMESPEC		stDeadline;
 	

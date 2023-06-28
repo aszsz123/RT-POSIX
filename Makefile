@@ -12,6 +12,8 @@ OBJ_DIR = $(CUR_DIR)/obj
 OUT_DIR = $(CUR_DIR)/lib
 DESTDIR ?= /opt
 INSTALL_DIR = $(DESTDIR)/rt_posix
+
+PYTHON_WRAPPER_DIR = $(CUR_DIR)/wrapper
 # Defaults
 CFLAGS_OPTIONS = -Wall -O3 -mtune=native -flto
 CFLAGS_DEFAULT = $(CFLAGS_OPTIONS) -I$(INC_POSIX)
@@ -37,7 +39,12 @@ OBJECTS = $(addprefix $(OBJ_DIR)/, $(notdir $(patsubst %.c, %.o, $(SOURCES))))
 #######################################################################################################
 vpath %.c  $(SRC_POSIX)
 #######################################################################################################
-all: library_posix examples tests
+all: library_posix examples tests 
+
+python: python_wrapper
+
+python_install:
+	$(MAKE) -C $(PYTHON_WRAPPER_DIR) install;
 
 apps: examples tests
 
@@ -46,6 +53,9 @@ examples: library_posix
 
 tests: library_posix
 	cd test/ && make all
+
+python_wrapper: 
+	$(MAKE) -C $(PYTHON_WRAPPER_DIR) all;
 
 library_posix: $(OUT_DIR)/$(POSIX_OUT)
 $(OUT_DIR)/$(POSIX_OUT): $(OBJECTS)
@@ -64,6 +74,7 @@ reset:
 install: all
 		@$(MKDIR) -p $(INSTALL_DIR); pwd > /dev/null
 		@cp -rfp $(OUT_DIR) $(INC_POSIX) $(INSTALL_DIR)
+		
 
 clean_examples: 
 	cd examples/ && make clean
@@ -81,12 +92,16 @@ clean:
 		$(CUR_DIR)/*.info  \
 		$(OUT_DIR)/*
 
+	$(MAKE) -C $(PYTHON_WRAPPER_DIR) clean;
+
 distclean: clean_examples clean_tests clean
 
 re:
 	@touch ./* $(INC_POSIX)/src/* 
 	make clean
 	make 
+
+	$(MAKE) -C $(PYTHON_WRAPPER_DIR) re;
 
 .PHONY: all clean 
 #######################################################################################################

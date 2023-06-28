@@ -125,7 +125,7 @@ default_trampoline_proc(PVOID arg)
 		DBG_ERROR("FAILED : START PROC : pTask is NULL or pTask is not Started!");
 		exit(-1);
 	}
-	else if ((pTask->dwStatus == eSuspended) || (pTask->bStartSuspended == TRUE))
+	else if (pTask != NULL && (pTask->dwStatus == eSuspended || pTask->bStartSuspended == TRUE))
 	{
 		DBG_TRACE("START PROC : %s Task Start Suspended! Waiting for resume_task()", pTask->strName);
 		pthread_mutex_lock(&pTask->mtxSuspend);
@@ -163,7 +163,7 @@ _init_posix_task(POSIX_TASK* apTask)
 	apTask->nPid = 0;
 	apTask->dwStatus = (DWORD)eInit;
 	apTask->nPriority = 0;
-	apTask->ullStackSize = DEFAULT_STKSIZE;
+	apTask->ullStackSize = PTHREAD_STACK_MIN;
 	apTask->bRtMode = FALSE;
 	apTask->bPeriodic = FALSE;
 
@@ -210,7 +210,12 @@ _create_task(POSIX_TASK* apTask, const PCHAR astrName, INT anStkSize, INT anPrio
 	}
 
 	// create pthread as detached so that its thread ID and other resources can be reused as soon as the thread terminates
-	nRet = pthread_attr_setdetachstate(&apTask->stThreadAttr, PTHREAD_CREATE_DETACHED);
+	if (apTask->bJoinable == TRUE){
+		nRet = pthread_attr_setdetachstate(&apTask->stThreadAttr, PTHREAD_CREATE_JOINABLE);
+	}
+	else {
+		nRet = pthread_attr_setdetachstate(&apTask->stThreadAttr, PTHREAD_CREATE_DETACHED);
+	}
 	if (nRet != RET_SUCC)
 	{
 		DBG_ERROR("FAILED : Create TASK (pthread_attr_setdetachstate): %s with errno (%d:%s)", astrName, nRet, strerror(nRet));
@@ -260,7 +265,7 @@ _create_task(POSIX_TASK* apTask, const PCHAR astrName, INT anStkSize, INT anPrio
 
 	// check sanity of stack size
 	if (anStkSize < (INT)PTHREAD_STACK_MIN || anStkSize == (INT)SET_DEFAULT_STKSZ)
-		apTask->ullStackSize = (UINT64)DEFAULT_STKSIZE;
+		apTask->ullStackSize = (UINT64)PTHREAD_STACK_MIN;
 	else
 		apTask->ullStackSize = (UINT64)anStkSize;
 
@@ -434,8 +439,16 @@ delete_task(POSIX_TASK* apTask)
 	else
 	{
 		PID nPid = pTask->nPid;
+		DBG_TRACE("Loading : Delete Posix TASK: (PID: %d)", nPid);
+
 		// kill the thread forcibly
-		nRet = kill(nPid, -SIGKILL);
+		nRet = kill(nPid, SIGKILL);
+		if(nRet == 0){
+			DBG_TRACE("SUCCESS : Delete Posix TASK: (PID: %d)", nPid);
+		}
+		else{
+			DBG_ERROR("FAILED : Delete Posix TASK");
+		}
 	}
 	return nRet;
 }
@@ -655,7 +668,7 @@ wait_next_period(UINT64* apullOverrunsCnt)
 	pTask->stDeadline.tv_nsec += (INT64)pTask->ullPeriod;
 	pTask->stDeadline.tv_sec += pTask->stDeadline.tv_nsec / NANOSEC_PER_SEC;
 	pTask->stDeadline.tv_nsec %= NANOSEC_PER_SEC;
-	
+
 	// check for missed deadlines
 	convert_nsecs_to_timespec(read_timer(), &stNow);
 	if ((stNow.tv_sec > pTask->stDeadline.tv_sec) || (stNow.tv_sec == pTask->stDeadline.tv_sec && pTask->stDeadline.tv_nsec < stNow.tv_nsec))
